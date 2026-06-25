@@ -36,33 +36,13 @@ export default function OutreachForm({ lead }: { lead: any }) {
       return;
     }
 
-    setIsSending(true);
-    setStatus(null);
+    // Build the mailto link
+    const mailtoLink = `mailto:${encodeURIComponent(recipientEmail)}?subject=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(emailBody)}`;
+    
+    // Open native mail client
+    window.location.href = mailtoLink;
 
-    try {
-      const response = await fetch('/api/outreach', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          leadId: lead.id,
-          to: recipientEmail,
-          subject: emailSubject,
-          body: emailBody,
-        }),
-      });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        setStatus({ type: 'success', message: 'E-mail succesvol verzonden! De status van de lead is geüpdatet.' });
-      } else {
-        setStatus({ type: 'error', message: data.error || 'Er ging iets mis bij het verzenden.' });
-      }
-    } catch (error) {
-      setStatus({ type: 'error', message: 'Er ging iets mis bij het verzenden.' });
-    } finally {
-      setIsSending(false);
-    }
+    setStatus({ type: 'success', message: 'Je e-mailprogramma is geopend! Let op: je kunt de status van deze lead handmatig op "Benaderd" zetten in het Leads overzicht.' });
   };
 
   return (
