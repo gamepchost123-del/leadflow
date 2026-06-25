@@ -1,10 +1,4 @@
-import { PrismaClient } from '@prisma/client';
-import { PrismaBetterSqlite3 } from '@prisma/adapter-better-sqlite3';
-import path from 'path';
-
-const dbPath = path.resolve(process.cwd(), 'dev.db');
-const adapter = new PrismaBetterSqlite3({ url: dbPath });
-const prisma = new PrismaClient({ adapter });
+import { prisma } from '../src/lib/prisma';
 
 const JOB_BOARD_DOMAINS = [
   'indeed.com', 'nl.indeed.com', 'linkedin.com', 'werkzoeken.nl',
