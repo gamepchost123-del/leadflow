@@ -1,0 +1,62 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Lead {
+  id           String     @id @default(cuid())
+  companyName  String
+  websiteUrl   String?
+  vacancyUrl   String?
+  vacancyTitle String?
+  email        String?
+  phone        String?
+  linkedinUrl  String?
+  facebookUrl  String?
+  category     String     @default("RECRUITMENT") // RECRUITMENT, HORECA_WINE
+  status       String     @default("NEW") // NEW, CONTACTED, INTERESTED, REJECTED, CUSTOMER
+  notes        String?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  outreaches   Outreach[]
+}
+
+model Outreach {
+  id           String    @id @default(cuid())
+  leadId       String
+  lead         Lead      @relation(fields: [leadId], references: [id])
+  type         String    // EMAIL, LINKEDIN, CALL
+  subject      String?
+  content      String?
+  status       String    @default("SENT") // SENT, REPLIED, BOUNCED
+  isFollowUp   Boolean   @default(false)
+  followUpDate DateTime?
+  sentAt       DateTime  @default(now())
+}
+
+model SearchCache {
+  id        String   @id @default(cuid())
+  cacheKey  String   @unique // hash of query+location+mode
+  query     String
+  location  String?
+  mode      String
+  results   String   // JSON stringified SearchResult[]
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+}
+
+model FilterRule {
+  id        String   @id @default(cuid())
+  type      String   // "DOMAIN", "URL_PATTERN", "KEYWORD"
+  category  String   // "JOB_BOARD", "CHAIN", "HORECA_LISTING", "STAFFING_AGENCY", "STAFFING_KEYWORD"
+  value     String   // The actual domain, pattern, or keyword
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([type, category, value])
+}
