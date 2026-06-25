@@ -4,53 +4,36 @@ import type { SearchResult } from '../src/lib/scraper';
 
 // De lijst met vacatures die je hebt opgegeven
 const VACANCIES = [
-  // Algemeen administratief
-  'Medewerker Backoffice',
-  'Medewerker Frontoffice',
-  'Office Manager',
-  'Management Assistent',
-  'Directiesecretaresse',
-  'Receptionist',
-  
-  // Financieel & boekhoudkundig
-  'Financieel Administratief Medewerker',
-  'Crediteurenadministrateur',
-  'Debiteurenadministrateur',
-  'Salarisadministrateur',
-  'Boekhouder',
-  'Junior Accountant',
-  
-  // Inkoop & logistiek
-  'Inkoopassistent',
-  'Logistiek Administratief Medewerker',
-  'Orderverwerker',
-  'Order Entry Medewerker',
-  'Planner',
-  
-  // HR & personeel
-  'HR Medewerker',
-  'HR Administrateur',
-  'Recruiter',
-  'Personeelsadministrateur',
-  
-  // Klant & communicatie
-  'Klantenservice Medewerker',
-  'Commercieel Medewerker Binnendienst',
-  'Relatiebeheerder',
-  'Sales Support Medewerker',
-  
-  // Projectondersteuning
-  'Projectassistent',
-  'Projectcoördinator',
-  'Beleidsmedewerker',
-  'Managementondersteuner',
-  
-  // Meer gespecialiseerd
-  'Legal Assistant',
-  'Juridisch Secretaresse',
-  'Compliance Medewerker',
-  'Contractbeheerder',
-  'Data Entry Medewerker'
+  'Tandartsassistent Utrecht',
+  'Tandartsassistente provincie Utrecht',
+  'Vacature tandartsassistent Zuid-Holland',
+  'Tandartsassistente Zuid-Holland',
+  'Tandartsassistent Noord-Holland',
+  'Tandartsassistente Noord-Holland',
+  'Tandartsassistent Amsterdam',
+  'Tandartsassistente Amsterdam',
+  'Tandartsassistent Rotterdam',
+  'Tandartsassistente Rotterdam',
+  'Tandartsassistent Den Haag',
+  'Tandartsassistente Den Haag',
+  'Tandartsassistent Haarlem',
+  'Tandartsassistente Haarlem',
+  'Tandartsassistent Leiden',
+  'Tandartsassistent Dordrecht',
+  'Tandartsassistent Amersfoort',
+  'Tandartsassistent Gouda',
+  'Tandartsassistent Delft',
+  'Tandartsassistent Zoetermeer',
+  'Tandartsassistent Hilversum',
+  'Preventieassistent Utrecht',
+  'Preventieassistent Zuid-Holland',
+  'Preventieassistent Noord-Holland',
+  'Preventieassistent Amsterdam',
+  'Preventieassistent Rotterdam',
+  'Preventieassistent Den Haag',
+  'Orthodontie assistent Utrecht',
+  'Orthodontie assistent Zuid-Holland',
+  'Orthodontie assistent Noord-Holland'
 ];
 
 async function runBulkScraper() {

@@ -375,7 +375,13 @@ Met vriendelijke groet`
                       </td>
                       <td className="text-right">
                         <div className="flex items-center gap-2 justify-end">
-                          <Link href={`/outreach?lead=${lead.id}`} className="btn btn-sm btn-primary">Pitch Sturen</Link>
+                          {lead.email ? (
+                            <a href={`mailto:${lead.email}?subject=Kennismaking %2D ${lead.companyName}&body=Beste,%0D%0A%0D%0AIk zag de vacature voor ${lead.vacancyTitle || 'tandartsassistent'} bij ${lead.companyName}.%0D%0A`} className="btn btn-sm btn-primary">
+                              Mailen
+                            </a>
+                          ) : (
+                            <span className="btn btn-sm btn-primary opacity-50 cursor-not-allowed" title="Geen emailadres gevonden">Geen Mail</span>
+                          )}
                           {showDeleteConfirm === lead.id ? (
                             <div className="flex items-center gap-1">
                               <button onClick={() => handleDelete(lead.id)} className="text-xs text-[var(--accent-red)] font-semibold hover:underline">Ja</button>
