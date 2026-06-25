@@ -9,7 +9,7 @@ async function seedFollowup() {
     data: {
       companyName: 'Test Company B.V.',
       email: 'test@example.com',
-      website: 'https://testcompany.nl',
+      websiteUrl: 'https://testcompany.nl',
       status: 'CONTACTED',
       category: 'RECRUITMENT',
       vacancyTitle: 'Senior Tester',
