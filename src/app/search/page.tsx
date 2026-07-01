@@ -64,6 +64,7 @@ export default function SearchPage() {
   const [query, setQuery] = useState('');
   const [location, setLocation] = useState('');
   const [isSearching, setIsSearching] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [results, setResults] = useState<SearchResult[]>([]);
   const [savedCount, setSavedCount] = useState(0);
   const [duplicateCount, setDuplicateCount] = useState(0);
@@ -71,10 +72,14 @@ export default function SearchPage() {
   const [hasSearched, setHasSearched] = useState(false);
   const [progressPhase, setProgressPhase] = useState('');
   const [progressDetail, setProgressDetail] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
 
   // Keep track of existing lead domains for cross-referencing
   const existingDomainsRef = useRef<Map<string, string>>(new Map());
+  // Track URLs already shown so "load more" pages don't repeat results
+  const seenUrlsRef = useRef<Set<string>>(new Set());
 
   const config = MODE_CONFIG[mode];
 
@@ -93,6 +98,86 @@ export default function SearchPage() {
     };
   }, []);
 
+  /**
+   * Consume the SSE search stream for a single page.
+   * Returns the number of *new* (deduped) results added, so the caller can
+   * decide whether to keep offering "load more".
+   */
+  const runStream = async (pageNum: number, controller: AbortController): Promise<number> => {
+    const params = new URLSearchParams({
+      query: query.trim(),
+      mode,
+      page: String(pageNum),
+      ...(location ? { location: location.trim() } : {}),
+    });
+
+    const response = await fetch(`/api/search/stream?${params}`, {
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({}));
+      setError(errData.error || 'Er ging iets mis bij het zoeken.');
+      return 0;
+    }
+
+    const reader = response.body?.getReader();
+    if (!reader) {
+      setError('Stream niet beschikbaar.');
+      return 0;
+    }
+
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let newThisPage = 0;
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || ''; // Keep incomplete line in buffer
+
+      let eventType = '';
+      for (const line of lines) {
+        if (line.startsWith('event: ')) {
+          eventType = line.slice(7).trim();
+        } else if (line.startsWith('data: ') && eventType) {
+          try {
+            const data = JSON.parse(line.slice(6));
+            if (eventType === 'result') {
+              const result = data as SearchResult;
+              // Skip results already shown on a previous page
+              if (seenUrlsRef.current.has(result.url)) {
+                eventType = '';
+                continue;
+              }
+              seenUrlsRef.current.add(result.url);
+              const enriched = enrichWithExisting(result);
+              newThisPage++;
+              setResults(prev => [...prev, enriched]);
+              if (enriched.existingLeadId) {
+                setDuplicateCount(c => c + 1);
+                setSavedCount(c => c + 1);
+              }
+            } else if (eventType === 'progress') {
+              setProgressPhase(data.phase);
+              setProgressDetail(data.detail);
+            } else if (eventType === 'error') {
+              setError(data.message);
+            }
+          } catch {
+            // Skip malformed JSON
+          }
+          eventType = '';
+        }
+      }
+    }
+
+    return newThisPage;
+  };
+
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!query) return;
@@ -108,6 +193,9 @@ export default function SearchPage() {
     setHasSearched(true);
     setDuplicateCount(0);
     setSavedCount(0);
+    setCurrentPage(1);
+    setHasMore(false);
+    seenUrlsRef.current = new Set();
     setProgressPhase('starting');
     setProgressDetail('Verbinding maken...');
 
@@ -131,71 +219,9 @@ export default function SearchPage() {
       }
       existingDomainsRef.current = existingDomains;
 
-      // Open SSE stream
-      const params = new URLSearchParams({
-        query: query.trim(),
-        mode,
-        ...(location ? { location: location.trim() } : {}),
-      });
-
-      const response = await fetch(`/api/search/stream?${params}`, {
-        signal: controller.signal,
-      });
-
-      if (!response.ok) {
-        const errData = await response.json().catch(() => ({}));
-        setError(errData.error || 'Er ging iets mis bij het zoeken.');
-        setIsSearching(false);
-        return;
-      }
-
-      const reader = response.body?.getReader();
-      if (!reader) {
-        setError('Stream niet beschikbaar.');
-        setIsSearching(false);
-        return;
-      }
-
-      const decoder = new TextDecoder();
-      let buffer = '';
-      let localDupeCount = 0;
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || ''; // Keep incomplete line in buffer
-
-        let eventType = '';
-        for (const line of lines) {
-          if (line.startsWith('event: ')) {
-            eventType = line.slice(7).trim();
-          } else if (line.startsWith('data: ') && eventType) {
-            try {
-              const data = JSON.parse(line.slice(6));
-              if (eventType === 'result') {
-                const enriched = enrichWithExisting(data as SearchResult);
-                if (enriched.existingLeadId) localDupeCount++;
-                setResults(prev => [...prev, enriched]);
-                if (enriched.existingLeadId) {
-                  setDuplicateCount(localDupeCount);
-                  setSavedCount(localDupeCount);
-                }
-              } else if (eventType === 'progress') {
-                setProgressPhase(data.phase);
-                setProgressDetail(data.detail);
-              } else if (eventType === 'error') {
-                setError(data.message);
-              }
-            } catch {
-              // Skip malformed JSON
-            }
-            eventType = '';
-          }
-        }
-      }
+      const newCount = await runStream(1, controller);
+      // Only offer "load more" if this page actually produced results
+      setHasMore(newCount > 0);
     } catch (err: any) {
       if (err?.name !== 'AbortError') {
         console.error('Search stream error:', err);
@@ -203,6 +229,34 @@ export default function SearchPage() {
       }
     } finally {
       setIsSearching(false);
+      setProgressPhase('');
+    }
+  };
+
+  const handleLoadMore = async () => {
+    if (isSearching || isLoadingMore) return;
+
+    const controller = new AbortController();
+    abortRef.current = controller;
+    const nextPage = currentPage + 1;
+
+    setIsLoadingMore(true);
+    setError(null);
+    setProgressPhase('searching');
+    setProgressDetail(`Meer resultaten laden (pagina ${nextPage})...`);
+
+    try {
+      const newCount = await runStream(nextPage, controller);
+      setCurrentPage(nextPage);
+      // Stop offering more once a page yields nothing new
+      setHasMore(newCount > 0);
+    } catch (err: any) {
+      if (err?.name !== 'AbortError') {
+        console.error('Load more stream error:', err);
+        setError('Kan geen extra resultaten laden.');
+      }
+    } finally {
+      setIsLoadingMore(false);
       setProgressPhase('');
     }
   };
@@ -542,6 +596,36 @@ export default function SearchPage() {
               </div>
             ))}
           </div>
+
+          {/* Load more — signals results aren't exhaustive; fetches a deeper page on demand */}
+          {!isSearching && hasMore && (
+            <div className="mt-6 flex flex-col items-center gap-2">
+              <button
+                type="button"
+                className="btn btn-secondary px-6 py-2.5"
+                onClick={handleLoadMore}
+                disabled={isLoadingMore}
+              >
+                {isLoadingMore ? (
+                  <>
+                    <div className="pulse-dot"></div>
+                    <div className="pulse-dot" style={{ animationDelay: '0.2s' }}></div>
+                    <div className="pulse-dot" style={{ animationDelay: '0.4s' }}></div>
+                    <span className="ml-1">Meer laden...</span>
+                  </>
+                ) : (
+                  <>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                    Meer resultaten laden
+                  </>
+                )}
+              </button>
+              <p className="text-xs text-[var(--text-muted)] text-center max-w-md">
+                Dit zijn niet alle mogelijke resultaten. Laad meer om dieper te zoeken
+                (dit verbruikt extra zoekcredits).
+              </p>
+            </div>
+          )}
         </div>
       )}
 

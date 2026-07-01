@@ -399,19 +399,17 @@ async function fetchBingPage(
   }
 }
 
-/** Search Bing pages 1-5 in parallel */
+/**
+ * Search a single Bing results page (1-based page number).
+ * Page 1 → first=1, page 2 → first=11, etc. One page per call keeps
+ * request volume low; deeper pages are only fetched via "load more".
+ */
 async function searchBing(
   query: string,
+  page: number = 1,
 ): Promise<{ title: string; snippet: string; url: string }[]> {
-  const pages = await Promise.allSettled([
-    fetchBingPage(query, 1),
-    fetchBingPage(query, 11),
-    fetchBingPage(query, 21),
-    fetchBingPage(query, 31),
-    fetchBingPage(query, 41),
-  ]);
-
-  return pages.flatMap(p => p.status === 'fulfilled' ? p.value : []);
+  const first = (page - 1) * 10 + 1;
+  return fetchBingPage(query, first);
 }
 
 // ---------- 2. Scrape an individual page for contact info ----------
@@ -686,22 +684,20 @@ async function fetchGooglePage(
   }
 }
 
-/** Search Google CSE pages 1-5 in parallel */
+/**
+ * Search a single Google CSE results page (1-based page number).
+ * Each call is one billable CSE query, so we fetch just one page by
+ * default; deeper pages are only requested when the user clicks "load more".
+ */
 async function searchGoogle(
   query: string,
+  page: number = 1,
 ): Promise<{ title: string; snippet: string; url: string }[]> {
   const apiKey = process.env.GOOGLE_API_KEY;
   if (!apiKey) return []; // Not configured — skip silently
 
-  const pages = await Promise.allSettled([
-    fetchGooglePage(query, 1),
-    fetchGooglePage(query, 11),
-    fetchGooglePage(query, 21),
-    fetchGooglePage(query, 31),
-    fetchGooglePage(query, 41),
-  ]);
-
-  return pages.flatMap(p => p.status === 'fulfilled' ? p.value : []);
+  const start = (page - 1) * 10 + 1;
+  return fetchGooglePage(query, start);
 }
 
 // ---------- 3. Multi-engine search — PARALLEL ----------
@@ -712,13 +708,15 @@ type RawResult = { title: string; snippet: string; url: string };
  * Search DDG + Bing + Google CSE + Startpage in parallel, merge and deduplicate.
  * All 4 engines run simultaneously for maximum coverage.
  */
-async function multiEngineSearch(query: string): Promise<RawResult[]> {
-  // Run all 4 engines in parallel
+async function multiEngineSearch(query: string, page: number = 1): Promise<RawResult[]> {
+  // DuckDuckGo and Startpage scrapers don't support pagination, so they only
+  // contribute on page 1. Bing and Google CSE paginate for "load more".
+  const runFirstPageOnly = page === 1;
   const [ddgResult, bingResult, googleResult, startpageResult] = await Promise.allSettled([
-    searchDuckDuckGo(query),
-    searchBing(query),
-    searchGoogle(query),
-    searchStartpage(query),
+    runFirstPageOnly ? searchDuckDuckGo(query) : Promise.resolve([]),
+    searchBing(query, page),
+    searchGoogle(query, page),
+    runFirstPageOnly ? searchStartpage(query) : Promise.resolve([]),
   ]);
 
   const ddgResults = ddgResult.status === 'fulfilled' ? ddgResult.value : [];
@@ -746,47 +744,26 @@ function buildSearchQueries(query: string, location?: string): string[] {
   const queries: string[] = [];
   const loc = location || '';
 
-  // Exclude staffing/recruitment bureau terms from all queries
-  const exclude = '-bijbaan -getwork -"get work" -"job in de regio" -simplyhired -baanbreed -jobkans -indeed -linkedin -uitzendbureau -detachering -"werving en selectie" -uitzendburo -interim -payroll -staffing -recruitment -uitzend -talent -bemiddeling -talentpool -wervingsbureau -talentpartner';
+  // Lean exclude string — only the most critical filters to avoid removing real results
+  const exclude = '-indeed -linkedin -uitzendbureau -"werving en selectie" -detachering -glassdoor -jooble';
 
-  // Wave 1: Direct company vacancy language
+  // Wave 1: Core vacancy language (4 queries)
   queries.push(
     `${query} vacature ${loc} ${exclude}`.trim(),
-    `${query} "wij zoeken" ${loc} ${exclude}`.trim(),
-    `${query} "we zoeken" ${loc} ${exclude}`.trim(),
-    `${query} "werken bij" ${loc} ${exclude}`.trim(),
-    `${query} medewerker gevraagd ${loc} ${exclude}`.trim(),
-    `"${query}" vacature site:.nl ${loc} ${exclude}`.trim(),
-    `${query} "kom bij ons werken" ${loc} ${exclude}`.trim(),
-    `${query} "word jij onze" ${loc} ${exclude}`.trim(),
+    `${query} "wij zoeken" OR "we zoeken" ${loc} ${exclude}`.trim(),
+    `${query} "werken bij" OR "kom werken" ${loc} ${exclude}`.trim(),
+    `${query} medewerker gezocht ${loc} ${exclude}`.trim(),
   );
 
-  // Wave 2: Broader search for more companies
+  // Wave 2: Broader search (4 queries)
   queries.push(
-    `${query} "ben jij de" ${loc} ${exclude}`.trim(),
-    `${query} "zoeken een" ${loc} ${exclude}`.trim(),
-    `${query} personeel gezocht ${loc} ${exclude}`.trim(),
-    `${query} "fulltime" OR "parttime" ${loc} ${exclude}`.trim(),
-    `${query} "direct aan de slag" ${loc} ${exclude}`.trim(),
-    `${query} "ons team" vacature ${loc} ${exclude}`.trim(),
-    `${query} "collega gezocht" ${loc} ${exclude}`.trim(),
-    `${query} "solliciteer" ${loc} site:.nl ${exclude}`.trim(),
+    `${query} personeel ${loc} ${exclude}`.trim(),
+    `${query} "solliciteer" OR "direct aan de slag" ${loc} ${exclude}`.trim(),
+    `${query} vacatures site:.nl ${loc} ${exclude}`.trim(),
+    `${query} ${loc} -indeed -linkedin -glassdoor -jooble`.trim(),
   );
 
-  // Wave 3: Extra deep search with alternative phrasings
-  queries.push(
-    `${query} "gezocht" ${loc} site:.nl ${exclude}`.trim(),
-    `${query} "in ons team" ${loc} ${exclude}`.trim(),
-    `${query} "nieuwe collega" ${loc} ${exclude}`.trim(),
-    `${query} "ervaren" vacature ${loc} ${exclude}`.trim(),
-    `${query} "per direct" ${loc} ${exclude}`.trim(),
-    `${query} "wij bieden" medewerker ${loc} ${exclude}`.trim(),
-    `${query} "aangenomen" OR "aannemen" ${loc} ${exclude}`.trim(),
-    `${query} "vacatures" ${loc} -indeed -linkedin ${exclude}`.trim(),
-  );
-
-  // Enforce .nl domain for all queries to target local Dutch MKB
-  return queries.map(q => q.includes('site:.nl') ? q : `${q} site:.nl`.trim());
+  return queries;
 }
 
 function buildHorecaQueries(query: string, location?: string): string[] {
@@ -817,8 +794,7 @@ function buildHorecaQueries(query: string, location?: string): string[] {
     `${query} eetcafé ${loc}`.trim(),
   );
 
-  // Enforce .nl domain for all queries to target local Dutch MKB
-  return queries.map(q => q.includes('site:.nl') ? q : `${q} site:.nl`.trim());
+  return queries;
 }
 
 // ---------- 4.5 Google Places API (New) ----------
@@ -883,26 +859,31 @@ async function runSearchPipeline(
   callbacks: StreamCallbacks,
   rules: FilterRules,
   filterFn: (r: RawResult, rules: FilterRules) => boolean,
+  page: number = 1,
 ): Promise<SearchResult[]> {
   const allRawResults: RawResult[] = [];
   const seenDomains = new Set<string>();
   const modeLabel = mode === 'recruitment' ? 'MKB' : 'Horeca';
 
-  callbacks.onProgress?.('searching', `Lokale bedrijven zoeken via Google Maps...`);
-  const placesResults = await searchGooglePlaces(baseQuery, location);
-  let placesCount = 0;
-  for (const r of placesResults) {
-    const domain = getDomain(r.url);
-    if (isChain(r.url, rules)) continue;
-    if (seenDomains.has(domain)) continue;
-    if (!filterFn(r, rules)) continue;
+  // Google Places returns the same local businesses regardless of web-search
+  // depth, so only query it on page 1 to avoid duplicate work on "load more".
+  if (page === 1) {
+    callbacks.onProgress?.('searching', `Lokale bedrijven zoeken via Google Maps...`);
+    const placesResults = await searchGooglePlaces(baseQuery, location);
+    let placesCount = 0;
+    for (const r of placesResults) {
+      const domain = getDomain(r.url);
+      if (isChain(r.url, rules)) continue;
+      if (seenDomains.has(domain)) continue;
+      if (!filterFn(r, rules)) continue;
 
-    seenDomains.add(domain);
-    allRawResults.push(r);
-    placesCount++;
-  }
-  if (placesCount > 0) {
-    console.log(`   → Added ${placesCount} new unique local businesses from Google Maps`);
+      seenDomains.add(domain);
+      allRawResults.push(r);
+      placesCount++;
+    }
+    if (placesCount > 0) {
+      console.log(`   → Added ${placesCount} new unique local businesses from Google Maps`);
+    }
   }
 
   for (let i = 0; i < searchQueries.length; i++) {
@@ -911,7 +892,7 @@ async function runSearchPipeline(
     console.log(`🔎 ${progress} Searching: ${q}`);
     callbacks.onProgress?.('searching', `Zoekopdracht ${i + 1} van ${searchQueries.length}`);
 
-    const results = await multiEngineSearch(q);
+    const results = await multiEngineSearch(q, page);
 
     let newCount = 0;
     for (const r of results) {
@@ -928,15 +909,15 @@ async function runSearchPipeline(
     console.log(`   → ${results.length} raw, ${newCount} new unique ${modeLabel} results`);
 
     if (i < searchQueries.length - 1) {
-      await sleep(500 + Math.random() * 500);
+      await sleep(200 + Math.random() * 200);
     }
   }
 
   console.log(`🔍 Total: ${allRawResults.length} unique results from ${searchQueries.length} queries`);
   callbacks.onProgress?.('scraping', `${allRawResults.length} websites worden gescand voor contactgegevens...`);
 
-  // Scrape company websites for contact info (batched, max 100 for deeper coverage)
-  const toScrape = allRawResults.slice(0, 100);
+  // Scrape company websites for contact info (batched, max 50 for speed)
+  const toScrape = allRawResults.slice(0, 50);
   const scrapeBatches: typeof toScrape[] = [];
   for (let i = 0; i < toScrape.length; i += 15) {
     scrapeBatches.push(toScrape.slice(i, i + 15));
@@ -1033,6 +1014,8 @@ const SYNONYM_MAP: Record<string, string[]> = {
   'timmerman': ['schrijnwerker', 'meubelmaker', 'houtbewerker'],
   'schilder': ['vastgoedonderhoud', 'spuiter', 'afwerker'],
   'metselaar': ['voeger', 'straatmaker', 'bouwvakker'],
+  'grondwerker': ['grondverzet', 'grondwerk', 'straatmaker', 'bestrating', 'rioolwerker', 'grondroerder'],
+  'stratenmaker': ['bestrating', 'bestrater', 'straatwerk', 'klinkerlegger'],
   'monteur': ['technicus', 'servicemonteur', 'onderhoudsmonteur', 'field engineer'],
   'chauffeur': ['vrachtwagenchauffeur', 'bezorger', 'koerier', 'transportmedewerker'],
   'kok': ['chef-kok', 'sous-chef', 'keukenhulp', 'keukenmedewerker'],
@@ -1047,6 +1030,9 @@ const SYNONYM_MAP: Record<string, string[]> = {
   'automonteur': ['autotechnicus', 'apk keurmeester', 'autobandenspecialist'],
   'beveiliger': ['beveiliging', 'security', 'bewaker', 'toezichthouder'],
   'verpleger': ['verpleegkundige', 'verzorgende', 'zorgmedewerker'],
+  'stukadoor': ['pleisterwerk', 'stucwerk', 'wand- en plafondafwerker'],
+  'tegelzetter': ['tegelwerk', 'vloerenlegger', 'tegelleger'],
+  'machinist': ['kraanmachinist', 'bediener', 'operator bouwmachine'],
 };
 
 /**
@@ -1076,21 +1062,19 @@ export async function searchVacancies(
   location: string | undefined,
   callbacks: StreamCallbacks | undefined,
   rules: FilterRules,
+  page: number = 1,
 ): Promise<SearchResult[]> {
   // Build queries for the main search term
   const searchQueries = buildSearchQueries(query, location);
 
-  // Add synonym-expanded queries (top 3 synonyms only to keep reasonable time)
+  // Add synonym-expanded queries (top 3 synonyms, 2 queries each to stay fast)
   const synonyms = getSynonyms(query).slice(0, 3);
   for (const syn of synonyms) {
-    // Add 4 core queries per synonym (not all 24 — that would be too many)
-    const exclude = '-uitzendbureau -detachering -"werving en selectie" -uitzendburo -interim -payroll -staffing -recruitment -uitzend -talent -bemiddeling -talentpool -wervingsbureau -talentpartner';
+    const exclude = '-indeed -linkedin -uitzendbureau -"werving en selectie" -detachering -glassdoor -jooble';
     const loc = location || '';
     searchQueries.push(
       `${syn} vacature ${loc} ${exclude}`.trim(),
-      `${syn} "wij zoeken" ${loc} ${exclude}`.trim(),
-      `${syn} "werken bij" ${loc} ${exclude}`.trim(),
-      `"${syn}" vacature site:.nl ${loc} ${exclude}`.trim(),
+      `${syn} personeel gezocht ${loc} ${exclude}`.trim(),
     );
   }
 
@@ -1103,7 +1087,7 @@ export async function searchVacancies(
     if (isStaffingAgencyDomain(r.url, rules)) return false;
     if (hasStaffingKeywords(r.title + ' ' + r.snippet, rules)) return false;
     return true;
-  });
+  }, page);
 }
 
 export async function searchHoreca(
@@ -1111,29 +1095,30 @@ export async function searchHoreca(
   location: string | undefined,
   callbacks: StreamCallbacks | undefined,
   rules: FilterRules,
+  page: number = 1,
 ): Promise<SearchResult[]> {
   const searchQueries = buildHorecaQueries(query, location);
   return runSearchPipeline(query, location, searchQueries, 'horeca_wine', callbacks || {}, rules, (r, rules) => {
     if (isJobBoard(r.url, rules)) return false;
     if (isHorecaListing(r.url, rules)) return false;
     return true;
-  });
+  }, page);
 }
 
 // ---------- 7. Cache layer ----------
 
-function cacheKey(query: string, location: string | undefined, mode: SearchMode): string {
-  const raw = `${query.toLowerCase().trim()}|${(location || '').toLowerCase().trim()}|${mode}`;
+function cacheKey(query: string, location: string | undefined, mode: SearchMode, page: number): string {
+  const raw = `${query.toLowerCase().trim()}|${(location || '').toLowerCase().trim()}|${mode}|p${page}`;
   return crypto.createHash('md5').update(raw).digest('hex');
 }
 
 async function getCachedResults(
-  query: string, location: string | undefined, mode: SearchMode,
+  query: string, location: string | undefined, mode: SearchMode, page: number,
 ): Promise<SearchResult[] | null> {
   try {
     // Dynamic import to avoid issues in non-prisma contexts
     const { prisma } = await import('@/lib/prisma');
-    const key = cacheKey(query, location, mode);
+    const key = cacheKey(query, location, mode, page);
     const cached = await prisma.searchCache.findUnique({ where: { cacheKey: key } });
 
     if (cached && cached.expiresAt > new Date()) {
@@ -1152,11 +1137,11 @@ async function getCachedResults(
 }
 
 async function setCachedResults(
-  query: string, location: string | undefined, mode: SearchMode, results: SearchResult[],
+  query: string, location: string | undefined, mode: SearchMode, page: number, results: SearchResult[],
 ): Promise<void> {
   try {
     const { prisma } = await import('@/lib/prisma');
-    const key = cacheKey(query, location, mode);
+    const key = cacheKey(query, location, mode, page);
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
 
     await prisma.searchCache.upsert({
@@ -1177,15 +1162,18 @@ async function setCachedResults(
   }
 }
 
-/** Unified search entry point — with caching */
+/** Unified search entry point — with caching. `page` (1-based) drives the
+ *  "load more" flow: page 1 is the cheap default, deeper pages fetch more
+ *  web-search results on demand. */
 export async function search(
   query: string,
   location?: string,
   mode: SearchMode = 'recruitment',
   callbacks?: StreamCallbacks,
+  page: number = 1,
 ): Promise<SearchResult[]> {
-  // Check cache first
-  const cached = await getCachedResults(query, location, mode);
+  // Check cache first (cached per page)
+  const cached = await getCachedResults(query, location, mode, page);
   if (cached) {
     // Emit cached results through callback
     if (callbacks?.onResult) {
@@ -1203,14 +1191,14 @@ export async function search(
   // No cache — run live search
   let results: SearchResult[];
   if (mode === 'horeca_wine') {
-    results = await searchHoreca(query, location, callbacks, rules);
+    results = await searchHoreca(query, location, callbacks, rules, page);
   } else {
-    results = await searchVacancies(query, location, callbacks, rules);
+    results = await searchVacancies(query, location, callbacks, rules, page);
   }
 
   // Store in cache
   if (results.length > 0) {
-    await setCachedResults(query, location, mode, results);
+    await setCachedResults(query, location, mode, page, results);
   }
 
   callbacks?.onProgress?.('done', `${results.length} resultaten gevonden`);

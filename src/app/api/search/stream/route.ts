@@ -12,6 +12,7 @@ export async function GET(req: Request) {
   const query = searchParams.get('query')?.trim();
   const location = searchParams.get('location')?.trim() || undefined;
   const mode = (searchParams.get('mode') || 'recruitment') as SearchMode;
+  const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10) || 1);
 
   if (!query) {
     return new Response(
@@ -44,8 +45,8 @@ export async function GET(req: Request) {
       };
 
       try {
-        const results = await search(query, location, mode, callbacks);
-        send('done', { total: results.length });
+        const results = await search(query, location, mode, callbacks, page);
+        send('done', { total: results.length, page });
       } catch (error) {
         console.error('Stream search error:', error);
         send('error', { message: 'Er ging iets mis bij het zoeken.' });
