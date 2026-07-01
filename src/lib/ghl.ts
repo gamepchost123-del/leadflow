@@ -168,6 +168,9 @@ async function createOrUpsertContact(input: GhlLeadInput): Promise<string> {
   const locationId = process.env.GHL_LOCATION_ID!;
   const body: Record<string, any> = {
     locationId,
+    // GHL rejects contacts that have none of email/phone/firstName/lastName,
+    // so always map the company name into firstName as well.
+    firstName: input.companyName,
     name: input.companyName,
     companyName: input.companyName,
     source: 'LeadFlow scraper',
