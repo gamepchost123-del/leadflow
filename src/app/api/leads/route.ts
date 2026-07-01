@@ -1,5 +1,40 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { isGhlConfigured, syncLeadToGhl } from '@/lib/ghl';
+
+type LeadRecord = Awaited<ReturnType<typeof prisma.lead.create>>;
+
+/**
+ * Best-effort push of a freshly created lead to GoHighLevel. Never throws —
+ * a GHL failure must not break local lead saving; the error is stored on the
+ * lead so it can be retried from the leads page.
+ */
+async function maybeSyncToGhl(lead: LeadRecord): Promise<LeadRecord> {
+  if (!isGhlConfigured()) return lead;
+  if ((lead as any).ghlOpportunityId) return lead; // already in a pipeline
+
+  try {
+    const { contactId, opportunityId } = await syncLeadToGhl({
+      companyName: lead.companyName,
+      email: lead.email,
+      phone: lead.phone,
+      website: lead.websiteUrl || lead.vacancyUrl,
+      vacancyTitle: lead.vacancyTitle,
+      category: lead.category,
+      existingContactId: (lead as any).ghlContactId,
+    });
+    return await prisma.lead.update({
+      where: { id: lead.id },
+      data: { ghlContactId: contactId, ghlOpportunityId: opportunityId, ghlSyncedAt: new Date(), ghlSyncError: null },
+    });
+  } catch (err: any) {
+    console.warn(`⚠️ GoHighLevel sync failed for lead ${lead.id}:`, err?.message || err);
+    return await prisma.lead.update({
+      where: { id: lead.id },
+      data: { ghlSyncError: String(err?.message || err).slice(0, 500) },
+    });
+  }
+}
 
 /** Extract the root domain from a URL for deduplication */
 function extractDomain(url: string): string | null {
@@ -96,7 +131,10 @@ export async function POST(req: Request) {
       },
     });
 
-    return NextResponse.json({ success: true, lead: newLead });
+    // Auto-push new leads into the GoHighLevel pipeline (best-effort)
+    const syncedLead = await maybeSyncToGhl(newLead);
+
+    return NextResponse.json({ success: true, lead: syncedLead });
   } catch (error) {
     console.error('Create Lead error:', error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });

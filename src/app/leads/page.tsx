@@ -18,6 +18,10 @@ interface Lead {
   status: string;
   notes: string | null;
   createdAt: string;
+  ghlContactId?: string | null;
+  ghlOpportunityId?: string | null;
+  ghlSyncedAt?: string | null;
+  ghlSyncError?: string | null;
 }
 
 type CategoryFilter = 'ALL' | 'RECRUITMENT' | 'HORECA_WINE';
@@ -48,6 +52,7 @@ Met vriendelijke groet`
   );
   const [isSending, setIsSending] = useState(false);
   const [sendProgress, setSendProgress] = useState<{ sent: number; total: number; failed: number } | null>(null);
+  const [ghlSyncing, setGhlSyncing] = useState<Set<string>>(new Set());
 
   useEffect(() => { fetchLeads(); }, []);
 
@@ -83,6 +88,42 @@ Met vriendelijke groet`
   const mailableSelected = useMemo(() => {
     return filteredLeads.filter((l) => selectedLeads.has(l.id) && l.email);
   }, [filteredLeads, selectedLeads]);
+
+  // Selected leads that aren't in the GoHighLevel pipeline yet
+  const ghlSyncableSelected = useMemo(() => {
+    return filteredLeads.filter((l) => selectedLeads.has(l.id) && !l.ghlOpportunityId);
+  }, [filteredLeads, selectedLeads]);
+
+  // --- Push lead(s) to the GoHighLevel pipeline ---
+  const syncToGhl = async (ids: string[]) => {
+    if (ids.length === 0) return;
+    setGhlSyncing((prev) => new Set([...prev, ...ids]));
+    try {
+      const res = await fetch('/api/leads/ghl-sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || 'GoHighLevel-sync mislukt.');
+        return;
+      }
+      await fetchLeads();
+      if (data.failed > 0) {
+        alert(`${data.synced} lead(s) naar GoHighLevel gestuurd, ${data.failed} mislukt. Bekijk de foutmelding via de knop bij de betreffende lead.`);
+      }
+    } catch (err) {
+      console.error('GHL sync error:', err);
+      alert('Kan geen verbinding maken met de server.');
+    } finally {
+      setGhlSyncing((prev) => {
+        const next = new Set(prev);
+        ids.forEach((i) => next.delete(i));
+        return next;
+      });
+    }
+  };
 
   const toggleLead = (id: string) => {
     const next = new Set(selectedLeads);
@@ -227,6 +268,12 @@ Met vriendelijke groet`
             <button className="btn text-white" style={{ background: 'var(--gradient-success)' }} onClick={() => setShowBulkModal(true)}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
               Bulk Mailen ({mailableSelected.length})
+            </button>
+          )}
+          {ghlSyncableSelected.length > 0 && (
+            <button className="btn text-white" style={{ background: 'var(--gradient-primary)' }} onClick={() => syncToGhl(ghlSyncableSelected.map((l) => l.id))}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+              Naar GHL ({ghlSyncableSelected.length})
             </button>
           )}
           {filteredLeads.length > 0 && (
@@ -375,6 +422,26 @@ Met vriendelijke groet`
                       </td>
                       <td className="text-right">
                         <div className="flex items-center gap-2 justify-end">
+                          {lead.ghlOpportunityId ? (
+                            <span className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--accent-green)]" title={lead.ghlSyncedAt ? `In GoHighLevel sinds ${new Date(lead.ghlSyncedAt).toLocaleString('nl-NL')}` : 'In GoHighLevel pipeline'}>
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                              GHL
+                            </span>
+                          ) : (
+                            <button
+                              onClick={() => syncToGhl([lead.id])}
+                              disabled={ghlSyncing.has(lead.id)}
+                              className="btn btn-sm btn-secondary"
+                              title={lead.ghlSyncError ? `Vorige poging mislukt: ${lead.ghlSyncError}` : 'Naar GoHighLevel pipeline sturen'}
+                            >
+                              {ghlSyncing.has(lead.id) ? '…' : (
+                                <>
+                                  {lead.ghlSyncError && <span className="text-[var(--accent-red)] mr-0.5">⚠</span>}
+                                  → GHL
+                                </>
+                              )}
+                            </button>
+                          )}
                           {lead.email ? (
                             <a href={`mailto:${lead.email}?subject=Kennismaking %2D ${lead.companyName}&body=Beste,%0D%0A%0D%0AIk zag de vacature voor ${lead.vacancyTitle || 'tandartsassistent'} bij ${lead.companyName}.%0D%0A`} className="btn btn-sm btn-primary">
                               Mailen

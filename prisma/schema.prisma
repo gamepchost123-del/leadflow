@@ -19,6 +19,11 @@ model Lead {
   category     String     @default("RECRUITMENT") // RECRUITMENT, HORECA_WINE
   status       String     @default("NEW") // NEW, CONTACTED, INTERESTED, REJECTED, CUSTOMER
   notes        String?
+  // GoHighLevel (LeadConnector) sync state
+  ghlContactId     String?
+  ghlOpportunityId String?
+  ghlSyncedAt      DateTime?
+  ghlSyncError     String?
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
   outreaches   Outreach[]
