@@ -123,6 +123,7 @@ export interface FilterRules {
   staffingKeywords: string[];
   staffingUrlPatterns: RegExp[];
   staffingDomainPatterns: string[];
+  alreadyContacted: string[];
 }
 
 export async function loadFilterRules(): Promise<FilterRules> {
@@ -137,6 +138,7 @@ export async function loadFilterRules(): Promise<FilterRules> {
     staffingKeywords: [],
     staffingUrlPatterns: [],
     staffingDomainPatterns: [],
+    alreadyContacted: [],
   };
 
   for (const rule of activeRules) {
@@ -149,6 +151,7 @@ export async function loadFilterRules(): Promise<FilterRules> {
     }
     else if (rule.category === 'STAFFING_KEYWORD') rules.staffingKeywords.push(rule.value.toLowerCase());
     else if (rule.category === 'STAFFING_DOMAIN_PATTERN') rules.staffingDomainPatterns.push(rule.value.toLowerCase());
+    else if (rule.category === 'ALREADY_CONTACTED') rules.alreadyContacted.push(rule.value.toLowerCase());
   }
   return rules;
 }
@@ -171,6 +174,11 @@ function isJobBoard(url: string, rules: FilterRules): boolean {
 
 function isChain(url: string, rules: FilterRules): boolean {
   return isDomainInList(url, rules.chains);
+}
+
+/** Businesses we already have contact with (imported from GoHighLevel) — never surface again. */
+function isAlreadyContacted(url: string, rules: FilterRules): boolean {
+  return isDomainInList(url, rules.alreadyContacted);
 }
 
 function isHorecaListing(url: string, rules: FilterRules): boolean {
@@ -874,6 +882,7 @@ async function runSearchPipeline(
     for (const r of placesResults) {
       const domain = getDomain(r.url);
       if (isChain(r.url, rules)) continue;
+      if (isAlreadyContacted(r.url, rules)) continue;
       if (seenDomains.has(domain)) continue;
       if (!filterFn(r, rules)) continue;
 
@@ -898,6 +907,7 @@ async function runSearchPipeline(
     for (const r of results) {
       const domain = getDomain(r.url);
       if (isChain(r.url, rules)) continue;
+      if (isAlreadyContacted(r.url, rules)) continue;
       if (seenDomains.has(domain)) continue;
       if (!filterFn(r, rules)) continue;
 
