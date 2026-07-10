@@ -396,6 +396,12 @@ async function fetchBingPage(
       const snippet = $(el).find('.b_caption p').text().trim();
 
       if (title && href && href.startsWith('http')) {
+        // Bing mixes in its own redirect/ad links (bing.com/ck/a?...) that
+        // point to unrelated sites — never real leads, so drop them.
+        try {
+          const host = new URL(href).hostname.replace(/^www\./, '').toLowerCase();
+          if (host === 'bing.com' || host.endsWith('.bing.com')) return;
+        } catch { return; }
         results.push({ title, snippet, url: href });
       }
     });
