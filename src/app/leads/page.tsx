@@ -22,7 +22,17 @@ interface Lead {
   ghlOpportunityId?: string | null;
   ghlSyncedAt?: string | null;
   ghlSyncError?: string | null;
+  ghlPipeline?: string | null;
 }
+
+/** Role filter options — matched against a lead's ghlPipeline. */
+const ROLE_FILTERS = [
+  { key: 'ALL', label: '📋 Alle rollen', pipeline: null as string | null },
+  { key: 'tandarts', label: '🦷 Tandarts', pipeline: 'Emails: Tandarts Werkgever' },
+  { key: 'apotheek', label: '💊 Apotheek', pipeline: 'Emails: Apotheek Werkgever' },
+  { key: 'secretaresse', label: '📋 Medisch secr.', pipeline: 'Emails: Medisch secretaresse Werkgever' },
+  { key: 'none', label: '➖ Geen rol', pipeline: '__none__' },
+];
 
 type CategoryFilter = 'ALL' | 'RECRUITMENT' | 'HORECA_WINE';
 type StatusFilter = 'ALL' | 'NEW' | 'CONTACTED' | 'INTERESTED' | 'REJECTED' | 'CUSTOMER';
@@ -32,6 +42,7 @@ export default function LeadsPage() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('ALL');
+  const [roleFilter, setRoleFilter] = useState<string>('ALL');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL');
   const [emailFilter, setEmailFilter] = useState<EmailFilter>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
@@ -71,6 +82,11 @@ Met vriendelijke groet`
   const filteredLeads = useMemo(() => {
     return leads.filter((lead) => {
       if (categoryFilter !== 'ALL' && lead.category !== categoryFilter) return false;
+      if (roleFilter !== 'ALL') {
+        const rp = ROLE_FILTERS.find((r) => r.key === roleFilter)?.pipeline;
+        if (rp === '__none__') { if (lead.ghlPipeline) return false; }
+        else if (lead.ghlPipeline !== rp) return false;
+      }
       if (statusFilter !== 'ALL' && lead.status !== statusFilter) return false;
       if (emailFilter === 'WITH_EMAIL' && !lead.email) return false;
       
@@ -83,7 +99,7 @@ Met vriendelijke groet`
       
       return true;
     });
-  }, [leads, categoryFilter, statusFilter, emailFilter, searchQuery]);
+  }, [leads, categoryFilter, roleFilter, statusFilter, emailFilter, searchQuery]);
 
   const mailableSelected = useMemo(() => {
     return filteredLeads.filter((l) => selectedLeads.has(l.id) && l.email);
@@ -295,6 +311,15 @@ Met vriendelijke groet`
             onChange={(e) => setSearchQuery(e.target.value)}
             className="input-field max-w-sm w-full"
           />
+        </div>
+        <div className="flex flex-wrap gap-4 items-center mb-4">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-xs font-medium text-[var(--text-muted)]">Rol:</span>
+            {ROLE_FILTERS.map((opt) => (
+              <button key={opt.key} onClick={() => setRoleFilter(opt.key)}
+                className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${roleFilter === opt.key ? 'bg-[var(--accent-blue)] text-white shadow-sm' : 'bg-[var(--bg-secondary)] text-[var(--text-muted)] hover:text-[var(--text-primary)] border border-[var(--border-color)]'}`}>{opt.label}</button>
+            ))}
+          </div>
         </div>
         <div className="flex flex-wrap gap-4 items-center">
           <div className="flex items-center gap-2">
