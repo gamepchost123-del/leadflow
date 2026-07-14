@@ -24,6 +24,7 @@ export interface GhlLeadInput {
   vacancyTitle?: string | null;
   category?: string | null; // RECRUITMENT | HORECA_WINE
   existingContactId?: string | null;
+  pipelineName?: string | null; // route to this pipeline (null = env default)
 }
 
 export interface GhlSyncResult {
@@ -80,7 +81,7 @@ async function ghlFetch(path: string, init: RequestInit = {}): Promise<any> {
 
 // ---------- Pipeline / stage resolution (name -> id, cached) ----------
 
-let pipelineCache: { pipelineId: string; stageId: string; at: number } | null = null;
+const pipelineCache = new Map<string, { pipelineId: string; stageId: string; at: number }>();
 const PIPELINE_CACHE_TTL = 10 * 60 * 1000; // 10 min
 
 interface GhlPipeline {
@@ -103,16 +104,23 @@ export async function listPipelines(): Promise<GhlPipeline[]> {
   }));
 }
 
-async function resolvePipelineAndStage(): Promise<{ pipelineId: string; stageId: string }> {
-  // Explicit ids win — no lookup needed.
-  const explicitPipeline = process.env.GHL_PIPELINE_ID;
-  const explicitStage = process.env.GHL_PIPELINE_STAGE_ID;
-  if (explicitPipeline && explicitStage) {
-    return { pipelineId: explicitPipeline, stageId: explicitStage };
+async function resolvePipelineAndStage(overrideName?: string | null): Promise<{ pipelineId: string; stageId: string }> {
+  // Target pipeline: per-lead override wins, else the env default.
+  const wantPipeline = (overrideName || process.env.GHL_PIPELINE_NAME || '').toLowerCase().trim();
+
+  // Explicit env ids only apply to the default pipeline (no override given).
+  if (!overrideName) {
+    const explicitPipeline = process.env.GHL_PIPELINE_ID;
+    const explicitStage = process.env.GHL_PIPELINE_STAGE_ID;
+    if (explicitPipeline && explicitStage) {
+      return { pipelineId: explicitPipeline, stageId: explicitStage };
+    }
   }
 
-  if (pipelineCache && Date.now() - pipelineCache.at < PIPELINE_CACHE_TTL) {
-    return { pipelineId: pipelineCache.pipelineId, stageId: pipelineCache.stageId };
+  const cacheKey = wantPipeline || '__default__';
+  const cached = pipelineCache.get(cacheKey);
+  if (cached && Date.now() - cached.at < PIPELINE_CACHE_TTL) {
+    return { pipelineId: cached.pipelineId, stageId: cached.stageId };
   }
 
   const pipelines = await listPipelines();
@@ -120,29 +128,21 @@ async function resolvePipelineAndStage(): Promise<{ pipelineId: string; stageId:
     throw new Error('Geen pipelines gevonden in GoHighLevel voor deze locatie.');
   }
 
-  const wantPipeline = (process.env.GHL_PIPELINE_NAME || '').toLowerCase().trim();
-  const pipeline = explicitPipeline
-    ? pipelines.find((p) => p.id === explicitPipeline)
-    : wantPipeline
-      ? pipelines.find((p) => p.name.toLowerCase().trim() === wantPipeline)
-      : pipelines[0];
+  const pipeline = wantPipeline
+    ? pipelines.find((p) => p.name.toLowerCase().trim() === wantPipeline)
+    : pipelines[0];
   if (!pipeline) {
-    throw new Error(`Pipeline "${process.env.GHL_PIPELINE_NAME}" niet gevonden in GoHighLevel.`);
+    throw new Error(`Pipeline "${overrideName || process.env.GHL_PIPELINE_NAME}" niet gevonden in GoHighLevel.`);
   }
 
+  // Stage: configured stage name if it exists in this pipeline, else first stage.
   const wantStage = (process.env.GHL_PIPELINE_STAGE_NAME || '').toLowerCase().trim();
-  const stage = explicitStage
-    ? pipeline.stages.find((s) => s.id === explicitStage)
-    : wantStage
-      ? pipeline.stages.find((s) => s.name.toLowerCase().trim() === wantStage)
-      : pipeline.stages[0];
+  const stage = (wantStage && pipeline.stages.find((s) => s.name.toLowerCase().trim() === wantStage)) || pipeline.stages[0];
   if (!stage) {
-    throw new Error(
-      `Stage "${process.env.GHL_PIPELINE_STAGE_NAME}" niet gevonden in pipeline "${pipeline.name}".`,
-    );
+    throw new Error(`Geen stage gevonden in pipeline "${pipeline.name}".`);
   }
 
-  pipelineCache = { pipelineId: pipeline.id, stageId: stage.id, at: Date.now() };
+  pipelineCache.set(cacheKey, { pipelineId: pipeline.id, stageId: stage.id, at: Date.now() });
   return { pipelineId: pipeline.id, stageId: stage.id };
 }
 
@@ -207,8 +207,8 @@ async function createOrUpsertContact(input: GhlLeadInput): Promise<string> {
 
 // ---------- Opportunities ----------
 
-async function createOpportunity(name: string, contactId: string): Promise<string> {
-  const { pipelineId, stageId } = await resolvePipelineAndStage();
+async function createOpportunity(name: string, contactId: string, pipelineName?: string | null): Promise<string> {
+  const { pipelineId, stageId } = await resolvePipelineAndStage(pipelineName);
   const locationId = process.env.GHL_LOCATION_ID!;
   const body = {
     pipelineId,
@@ -240,7 +240,7 @@ export async function syncLeadToGhl(input: GhlLeadInput): Promise<GhlSyncResult>
   const oppName = input.vacancyTitle
     ? `${input.companyName} — ${input.vacancyTitle}`
     : input.companyName;
-  const opportunityId = await createOpportunity(oppName, contactId);
+  const opportunityId = await createOpportunity(oppName, contactId, input.pipelineName);
 
   return { contactId, opportunityId };
 }

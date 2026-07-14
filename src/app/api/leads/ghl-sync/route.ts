@@ -44,6 +44,7 @@ export async function POST(req: Request) {
           vacancyTitle: lead.vacancyTitle,
           category: lead.category,
           existingContactId: (lead as any).ghlContactId,
+          pipelineName: (lead as any).ghlPipeline,
         });
         await prisma.lead.update({
           where: { id: lead.id },

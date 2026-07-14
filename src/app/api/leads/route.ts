@@ -22,6 +22,7 @@ async function maybeSyncToGhl(lead: LeadRecord): Promise<LeadRecord> {
       vacancyTitle: lead.vacancyTitle,
       category: lead.category,
       existingContactId: (lead as any).ghlContactId,
+      pipelineName: (lead as any).ghlPipeline,
     });
     return await prisma.lead.update({
       where: { id: lead.id },

@@ -24,6 +24,7 @@ model Lead {
   ghlOpportunityId String?
   ghlSyncedAt      DateTime?
   ghlSyncError     String?
+  ghlPipeline      String?   // target GHL pipeline name (null = env default)
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
   outreaches   Outreach[]
