@@ -633,10 +633,10 @@ function findSubPageUrls($: cheerio.CheerioAPI, baseUrl: string): string[] {
     }
   });
 
-  // Sort by priority and take top 6 (thorough email hunt)
+  // Sort by priority and take top 3 (thorough enough, keeps scraping fast)
   return found
     .sort((a, b) => a.priority - b.priority)
-    .slice(0, 6)
+    .slice(0, 3)
     .map(f => f.url);
 }
 
