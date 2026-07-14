@@ -58,9 +58,18 @@ const MODE_CONFIG = {
   },
 };
 
+/** Recruitment role tabs — each routes saved leads to its GoHighLevel pipeline. */
+const RECRUITMENT_ROLES = [
+  { key: 'tandarts', label: '🦷 Tandartsassistent', query: 'tandartsassistent', pipeline: 'Emails: Tandarts Werkgever' },
+  { key: 'apotheek', label: '💊 Apothekersassistent', query: 'apothekersassistent', pipeline: 'Emails: Apotheek Werkgever' },
+  { key: 'secretaresse', label: '📋 Medisch secretaresse', query: 'medisch secretaresse', pipeline: 'Emails: Medisch secretaresse Werkgever' },
+  { key: 'algemeen', label: '🔍 Algemeen', query: '', pipeline: null as string | null },
+];
+
 export default function SearchPage() {
   const router = useRouter();
   const [mode, setMode] = useState<SearchMode>('recruitment');
+  const [roleKey, setRoleKey] = useState('tandarts');
   const [query, setQuery] = useState('');
   const [location, setLocation] = useState('');
   const [isSearching, setIsSearching] = useState(false);
@@ -82,6 +91,8 @@ export default function SearchPage() {
   const seenUrlsRef = useRef<Set<string>>(new Set());
 
   const config = MODE_CONFIG[mode];
+  const activeRole = RECRUITMENT_ROLES.find((r) => r.key === roleKey) || RECRUITMENT_ROLES[0];
+  const rolePipeline = mode === 'recruitment' ? activeRole.pipeline : null;
 
   /** Cross-reference a single result against existing leads */
   const enrichWithExisting = useCallback((result: SearchResult): SearchResult => {
@@ -268,7 +279,7 @@ export default function SearchPage() {
       const response = await fetch('/api/leads', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...lead, category: mode }),
+        body: JSON.stringify({ ...lead, category: mode, ghlPipeline: rolePipeline }),
       });
 
       if (response.ok) {
@@ -340,6 +351,33 @@ export default function SearchPage() {
           ))}
         </div>
       </div>
+
+      {/* Role tabs (recruitment) — route saved leads to the matching pipeline */}
+      {mode === 'recruitment' && (
+        <div className="card-glass mb-6">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-sm font-medium text-[var(--text-muted)] mr-2">Rol:</span>
+            {RECRUITMENT_ROLES.map((r) => (
+              <button
+                key={r.key}
+                onClick={() => { setRoleKey(r.key); if (r.query) setQuery(r.query); }}
+                className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+                  roleKey === r.key
+                    ? 'bg-[var(--accent-blue)] text-white shadow-md'
+                    : 'bg-[var(--bg-secondary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-[var(--border-color)]'
+                }`}
+              >
+                {r.label}
+              </button>
+            ))}
+          </div>
+          <p className="text-xs text-[var(--text-muted)] mt-2">
+            {rolePipeline
+              ? <>Opgeslagen leads gaan naar pipeline <span className="font-semibold text-[var(--text-primary)]">{rolePipeline}</span>.</>
+              : 'Algemeen zoeken — opgeslagen leads gaan naar de standaard-pipeline.'}
+          </p>
+        </div>
+      )}
 
       {/* Search form */}
       <div className="card-glass mb-8">

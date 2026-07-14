@@ -66,23 +66,25 @@ async function fetchWithRetry(url: string, options: RequestInit = {}, maxRetries
 
 /** Extract all email addresses from a block of text / HTML */
 function extractEmails(text: string): string[] {
+  // De-obfuscate common anti-scrape tricks before matching:
+  //   info [at] praktijk [dot] nl  |  info(at)praktijk(dot)nl  |  info&#64;praktijk.nl  |  info%40praktijk.nl
+  const deob = text
+    .replace(/&#64;|&#x40;/gi, '@')
+    .replace(/%40/gi, '@')
+    .replace(/\s*[\[(]\s*(?:at|apenstaartje)\s*[\])]\s*/gi, '@')
+    .replace(/\s*[\[(]\s*(?:dot|punt)\s*[\])]\s*/gi, '.');
+
   const re = /[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/g;
-  const matches = text.match(re) || [];
-  return [...new Set(matches)].filter(
-    (e) =>
-      !e.endsWith('.png') &&
-      !e.endsWith('.jpg') &&
-      !e.endsWith('.jpeg') &&
-      !e.endsWith('.gif') &&
-      !e.endsWith('.svg') &&
-      !e.endsWith('.css') &&
-      !e.endsWith('.js') &&
-      !e.endsWith('.webp') &&
-      !e.includes('example.com') &&
-      !e.includes('sentry.io') &&
-      !e.includes('wixpress.com') &&
-      !e.includes('wordpress.com') &&
-      !e.includes('googleapis.com'),
+  const matches = deob.match(re) || [];
+  // Placeholder / template / asset addresses that are not real leads
+  const bad = [
+    'example.com', 'example.org', 'sentry.io', 'wixpress.com', 'wordpress.com',
+    'googleapis.com', 'domein.nl', 'domain.com', 'yourdomain', 'jouw.email',
+    'voorbeeld@', 'naam@', 'your@', 'youremail', 'test@test', 'email@email',
+    'user@', 'no-reply@', 'noreply@', 'donotreply',
+  ];
+  return [...new Set(matches.map((e) => e.toLowerCase()))].filter(
+    (e) => !/\.(png|jpe?g|gif|svg|css|js|webp|ico)$/i.test(e) && !bad.some((b) => e.includes(b)),
   );
 }
 
@@ -599,8 +601,11 @@ function findSubPageUrls($: cheerio.CheerioAPI, baseUrl: string): string[] {
     { re: /team/i, priority: 3 },
     { re: /werken[\s-]?bij/i, priority: 4 },
     { re: /vacature/i, priority: 5 },
-    { re: /bereik/i, priority: 6 },
-    { re: /wie[\s-]?zijn[\s-]?wij/i, priority: 7 },
+    { re: /sollicit/i, priority: 6 },
+    { re: /banen|jobs|carriere|carrière|careers/i, priority: 7 },
+    { re: /personeel/i, priority: 8 },
+    { re: /bereik/i, priority: 9 },
+    { re: /wie[\s-]?zijn[\s-]?wij/i, priority: 10 },
   ];
 
   const found: { url: string; priority: number }[] = [];
@@ -628,10 +633,10 @@ function findSubPageUrls($: cheerio.CheerioAPI, baseUrl: string): string[] {
     }
   });
 
-  // Sort by priority and take top 4
+  // Sort by priority and take top 6 (thorough email hunt)
   return found
     .sort((a, b) => a.priority - b.priority)
-    .slice(0, 4)
+    .slice(0, 6)
     .map(f => f.url);
 }
 
@@ -962,6 +967,7 @@ async function runSearchPipeline(
   const results: SearchResult[] = [];
   const seenCompanyNames = new Set<string>();
   let skippedAgencies = 0;
+  let skippedNoEmail = 0;
 
   toScrape.forEach((raw, i) => {
     const scrapeResult =
@@ -993,6 +999,12 @@ async function runSearchPipeline(
       }
     }
 
+    // Require a real email address — leads without one are not added.
+    if (!scrapeResult?.emails?.length) {
+      skippedNoEmail++;
+      return;
+    }
+
     const nameKey = companyName.toLowerCase().trim();
     if (seenCompanyNames.has(nameKey)) return;
     seenCompanyNames.add(nameKey);
@@ -1015,6 +1027,9 @@ async function runSearchPipeline(
 
   if (skippedAgencies > 0) {
     console.log(`  🚫 Total agencies filtered at scrape stage: ${skippedAgencies}`);
+  }
+  if (skippedNoEmail > 0) {
+    console.log(`  📭 Skipped (no email address found): ${skippedNoEmail}`);
   }
   console.log(`✅ Returning ${results.length} filtered ${modeLabel} leads`);
   return results;

@@ -53,6 +53,14 @@ export async function POST(req: Request) {
     const domain = extractDomain(url);
     const companyName = (data.companyName || '').trim();
 
+    // Never add a lead without an email address
+    if (!data.email) {
+      return NextResponse.json(
+        { error: 'Lead zonder e-mailadres wordt niet toegevoegd.', skipped: true },
+        { status: 422 },
+      );
+    }
+
     // --- Duplicate detection ---
     // 1. Check by domain (most reliable)
     if (domain) {
@@ -129,6 +137,7 @@ export async function POST(req: Request) {
         category: data.category === 'horeca_wine' ? 'HORECA_WINE' : 'RECRUITMENT',
         notes: data.snippet,
         status: 'NEW',
+        ghlPipeline: data.ghlPipeline || null,
       },
     });
 
