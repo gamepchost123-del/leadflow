@@ -428,6 +428,20 @@ async function searchBing(
   return fetchBingPage(query, first);
 }
 
+/** Signals that a page actually advertises an open vacancy (recruitment mode). */
+const VACANCY_SIGNALS = [
+  'vacature', 'wij zoeken', 'we zoeken', 'gezocht', 'gevraagd', 'solliciteer', 'sollicitatie',
+  'solliciteren', 'werken bij', 'kom werken', 'team versterken', 'nieuwe collega', 'collega gezocht',
+  'uur per week', 'uren per week', 'fulltime', 'part-time', 'parttime', 'full-time', 'dienstverband',
+  'in dienst', 'arbeidsvoorwaarden', 'wij bieden', 'wat wij bieden', 'functie-eisen', 'functie eisen',
+  'wat ga je doen', 'wat vragen wij', 'wat wij vragen', 'jouw profiel', 'wat breng je mee',
+  'join our team', 'apply now', 'openstaande vacature', 'per direct', 'direct aan de slag', 'wij werven',
+];
+function hasVacancySignal(text: string): boolean {
+  const lower = text.toLowerCase();
+  return VACANCY_SIGNALS.some((s) => lower.includes(s));
+}
+
 // ---------- 2. Scrape an individual page for contact info ----------
 
 async function scrapePage(url: string, rules: FilterRules): Promise<{
@@ -436,10 +450,11 @@ async function scrapePage(url: string, rules: FilterRules): Promise<{
   phones: string[];
   metaDescription: string;
   isAgency: boolean;
+  hasVacancy: boolean;
   linkedinUrl?: string;
   facebookUrl?: string;
 }> {
-  const empty = { companyName: '', emails: [] as string[], phones: [] as string[], metaDescription: '', isAgency: false, linkedinUrl: undefined, facebookUrl: undefined };
+  const empty = { companyName: '', emails: [] as string[], phones: [] as string[], metaDescription: '', isAgency: false, hasVacancy: false, linkedinUrl: undefined, facebookUrl: undefined };
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 8000);
 
@@ -466,11 +481,15 @@ async function scrapePage(url: string, rules: FilterRules): Promise<{
 
     const companyName = extractCompanyName($, url);
     let emails = extractEmails(html);
-    const phones = extractPhones($('body').text());
+    const bodyText = $('body').text();
+    const phones = extractPhones(bodyText);
     const metaDescription =
       $('meta[name="description"]').attr('content') ||
       $('meta[property="og:description"]').attr('content') ||
       '';
+
+    // Does this page actually advertise an open vacancy?
+    const hasVacancy = hasVacancySignal(`${$('title').text()} ${metaDescription} ${bodyText.slice(0, 8000)}`);
 
     let linkedinUrl: string | undefined;
     let facebookUrl: string | undefined;
@@ -504,7 +523,7 @@ async function scrapePage(url: string, rules: FilterRules): Promise<{
       }
     }
 
-    return { companyName, emails, phones, metaDescription, isAgency, linkedinUrl, facebookUrl };
+    return { companyName, emails, phones, metaDescription, isAgency, hasVacancy, linkedinUrl, facebookUrl };
   } catch {
     return empty;
   } finally {
@@ -950,6 +969,7 @@ async function runSearchPipeline(
     phones: string[];
     metaDescription: string;
     isAgency: boolean;
+    hasVacancy: boolean;
     linkedinUrl?: string;
     facebookUrl?: string;
   }>)[] = [];
@@ -968,6 +988,7 @@ async function runSearchPipeline(
   const seenCompanyNames = new Set<string>();
   let skippedAgencies = 0;
   let skippedNoEmail = 0;
+  let skippedNoVacancy = 0;
 
   toScrape.forEach((raw, i) => {
     const scrapeResult =
@@ -1005,6 +1026,13 @@ async function runSearchPipeline(
       return;
     }
 
+    // Recruitment: only keep pages that actually advertise an open vacancy
+    // (drops company pages that merely mention the role without a live opening).
+    if (mode === 'recruitment' && !scrapeResult?.hasVacancy && !hasVacancySignal(`${raw.title} ${raw.snippet}`)) {
+      skippedNoVacancy++;
+      return;
+    }
+
     const nameKey = companyName.toLowerCase().trim();
     if (seenCompanyNames.has(nameKey)) return;
     seenCompanyNames.add(nameKey);
@@ -1030,6 +1058,9 @@ async function runSearchPipeline(
   }
   if (skippedNoEmail > 0) {
     console.log(`  📭 Skipped (no email address found): ${skippedNoEmail}`);
+  }
+  if (skippedNoVacancy > 0) {
+    console.log(`  🗂️ Skipped (no open vacancy on page): ${skippedNoVacancy}`);
   }
   console.log(`✅ Returning ${results.length} filtered ${modeLabel} leads`);
   return results;
