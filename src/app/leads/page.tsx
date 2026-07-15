@@ -34,6 +34,44 @@ const ROLE_FILTERS = [
   { key: 'none', label: '➖ Geen rol', pipeline: '__none__' },
 ];
 
+/** Per-role outreach templates, keyed on ghlPipeline. Opened via mailto on "Mailen". */
+const MAIL_TEMPLATES: Record<string, { subject: string; body: (company: string) => string }> = {
+  'Emails: Tandarts Werkgever': {
+    subject: 'tandartsassistent',
+    body: (company) => `Beste team van ${company},
+
+Ik zag de vacature voor tandartsassistent. Wij scholen diverse studenten uit uw omgeving om tot tandartsassistent.
+
+Onze studenten zijn volwassen herintreders. Wij leiden ze snel en goed op tot tandartsassistent en ze krijgen het Instituutsdiploma. We gebruiken hiervoor de Praktijkopleiding in plaats van BOL of BBL. De voordelen zijn:
+
+* Praktischer: de focus bij de start ligt op de belangrijkste vaardigheden voor de functie. De algemene en keuzevakken volgen later, maar de student is wel snel inzetbaar.
+* Sneller: de hele opleiding duurt 6 maanden. In het geval van vrijstellingen is het traject nog korter.
+* De werkbegeleiding is efficiënt. Alleen de kerntaken, werkprocessen en persoonlijke leerdoelen komen aan de orde.
+* We hebben niet de verplichting iedereen aan te nemen. We screenen o.a. houding, communicatieve- en digitale vaardigheden en ervaring in de zorg.
+* Goedkoop door de lage prijs en/of subsidiemogelijkheden.
+* Vast contactpersoon voor u en uw collega's.
+
+De studenten hebben bewust gekozen om tandartsassistent te worden en willen in dienst komen. Ik stel ze graag vrijblijvend voor.
+
+Is dit een optie voor u? Bij voorbaat dank voor uw reactie.
+
+Met vriendelijke groet,
+Jonathan`,
+  },
+  // 'Emails: Apotheek Werkgever': { subject: '...', body: (company) => `...` },
+  // 'Emails: Medisch secretaresse Werkgever': { subject: '...', body: (company) => `...` },
+};
+
+/** Build the mailto link for a lead, using its role template if available. */
+function buildMailto(lead: Lead): string {
+  const tmpl = lead.ghlPipeline ? MAIL_TEMPLATES[lead.ghlPipeline] : undefined;
+  const subject = tmpl ? tmpl.subject : `Kennismaking - ${lead.companyName}`;
+  const body = tmpl
+    ? tmpl.body(lead.companyName)
+    : `Beste,\n\nIk zag de vacature voor ${lead.vacancyTitle || 'uw vacature'} bij ${lead.companyName}.\n`;
+  return `mailto:${lead.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+}
+
 type CategoryFilter = 'ALL' | 'RECRUITMENT' | 'HORECA_WINE';
 type StatusFilter = 'ALL' | 'NEW' | 'CONTACTED' | 'INTERESTED' | 'REJECTED' | 'CUSTOMER';
 type EmailFilter = 'ALL' | 'WITH_EMAIL';
@@ -468,7 +506,7 @@ Met vriendelijke groet`
                             </button>
                           )}
                           {lead.email ? (
-                            <a href={`mailto:${lead.email}?subject=Kennismaking %2D ${lead.companyName}&body=Beste,%0D%0A%0D%0AIk zag de vacature voor ${lead.vacancyTitle || 'tandartsassistent'} bij ${lead.companyName}.%0D%0A`} className="btn btn-sm btn-primary">
+                            <a href={buildMailto(lead)} className="btn btn-sm btn-primary">
                               Mailen
                             </a>
                           ) : (
