@@ -189,6 +189,30 @@ Met vriendelijke groet`
     return filteredLeads.filter((l) => selectedLeads.has(l.id) && !l.ghlOpportunityId);
   }, [filteredLeads, selectedLeads]);
 
+  // --- Mail + GHL: move the lead's opportunity to the "Gemaild" stage ---
+  const markMailed = async (ids: string[]) => {
+    if (ids.length === 0) return;
+    setGhlSyncing((prev) => new Set([...prev, ...ids]));
+    try {
+      const res = await fetch('/api/leads/mail-sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids }),
+      });
+      if (res.ok) await fetchLeads();
+      // Note: the mailto already opened via the link; GHL runs in the background.
+      // Failures (e.g. a pipeline without a "Gemaild" stage) are stored on the lead.
+    } catch (err) {
+      console.error('mail-sync error:', err);
+    } finally {
+      setGhlSyncing((prev) => {
+        const next = new Set(prev);
+        ids.forEach((i) => next.delete(i));
+        return next;
+      });
+    }
+  };
+
   // --- Push lead(s) to the GoHighLevel pipeline ---
   const syncToGhl = async (ids: string[]) => {
     if (ids.length === 0) return;
@@ -529,7 +553,7 @@ Met vriendelijke groet`
                           {lead.email ? (
                             <a
                               href={buildMailto(lead)}
-                              onClick={() => { if (!lead.ghlOpportunityId && !ghlSyncing.has(lead.id)) syncToGhl([lead.id]); }}
+                              onClick={() => { if (!ghlSyncing.has(lead.id)) markMailed([lead.id]); }}
                               className="btn btn-sm btn-primary"
                               title={lead.ghlOpportunityId
                                 ? 'Mail openen (staat al in GHL-pipeline)'
