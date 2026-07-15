@@ -31,6 +31,7 @@ const ROLE_FILTERS = [
   { key: 'tandarts', label: '🦷 Tandarts', pipeline: 'Emails: Tandarts Werkgever' },
   { key: 'apotheek', label: '💊 Apotheek', pipeline: 'Emails: Apotheek Werkgever' },
   { key: 'secretaresse', label: '📋 Medisch secr.', pipeline: 'Emails: Medisch secretaresse Werkgever' },
+  { key: 'beveiliger', label: '🛡️ Beveiliger', pipeline: 'Emails: Beveiliger Werkgever' },
   { key: 'none', label: '➖ Geen rol', pipeline: '__none__' },
 ];
 

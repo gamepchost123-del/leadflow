@@ -63,6 +63,7 @@ const RECRUITMENT_ROLES = [
   { key: 'tandarts', label: '🦷 Tandartsassistent', query: 'tandartsassistent', pipeline: 'Emails: Tandarts Werkgever' },
   { key: 'apotheek', label: '💊 Apothekersassistent', query: 'apothekersassistent', pipeline: 'Emails: Apotheek Werkgever' },
   { key: 'secretaresse', label: '📋 Medisch secretaresse', query: 'medisch secretaresse', pipeline: 'Emails: Medisch secretaresse Werkgever' },
+  { key: 'beveiliger', label: '🛡️ Beveiliger', query: 'beveiliger', pipeline: 'Emails: Beveiliger Werkgever' },
   { key: 'algemeen', label: '🔍 Algemeen', query: '', pipeline: null as string | null },
 ];
 
