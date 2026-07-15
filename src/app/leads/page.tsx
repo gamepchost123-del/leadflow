@@ -485,32 +485,28 @@ Met vriendelijke groet`
                       </td>
                       <td className="text-right">
                         <div className="flex items-center gap-2 justify-end">
-                          {lead.ghlOpportunityId ? (
-                            <span className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--accent-green)]" title={lead.ghlSyncedAt ? `In GoHighLevel sinds ${new Date(lead.ghlSyncedAt).toLocaleString('nl-NL')}` : 'In GoHighLevel pipeline'}>
-                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                              GHL
-                            </span>
-                          ) : (
+                          {lead.email ? (
+                            <a
+                              href={buildMailto(lead)}
+                              onClick={() => { if (!lead.ghlOpportunityId && !ghlSyncing.has(lead.id)) syncToGhl([lead.id]); }}
+                              className="btn btn-sm btn-primary"
+                              title={lead.ghlOpportunityId
+                                ? 'Mail openen (staat al in GHL-pipeline)'
+                                : (lead.ghlSyncError ? `Mail openen + opnieuw naar GHL (vorige poging: ${lead.ghlSyncError})` : 'Mail openen én in de GHL-pipeline zetten')}
+                            >
+                              {ghlSyncing.has(lead.id) ? '✉ …' : (lead.ghlOpportunityId ? '✉ Mail ✓GHL' : '✉ Mail + GHL')}
+                            </a>
+                          ) : !lead.ghlOpportunityId ? (
                             <button
                               onClick={() => syncToGhl([lead.id])}
                               disabled={ghlSyncing.has(lead.id)}
                               className="btn btn-sm btn-secondary"
-                              title={lead.ghlSyncError ? `Vorige poging mislukt: ${lead.ghlSyncError}` : 'Naar GoHighLevel pipeline sturen'}
+                              title="Geen e-mailadres — alleen naar GHL-pipeline"
                             >
-                              {ghlSyncing.has(lead.id) ? '…' : (
-                                <>
-                                  {lead.ghlSyncError && <span className="text-[var(--accent-red)] mr-0.5">⚠</span>}
-                                  → GHL
-                                </>
-                              )}
+                              {ghlSyncing.has(lead.id) ? '…' : '→ GHL'}
                             </button>
-                          )}
-                          {lead.email ? (
-                            <a href={buildMailto(lead)} className="btn btn-sm btn-primary">
-                              Mailen
-                            </a>
                           ) : (
-                            <span className="btn btn-sm btn-primary opacity-50 cursor-not-allowed" title="Geen emailadres gevonden">Geen Mail</span>
+                            <span className="btn btn-sm btn-secondary opacity-60 cursor-default" title="In GHL-pipeline (geen e-mail)">✓ GHL</span>
                           )}
                           {showDeleteConfirm === lead.id ? (
                             <div className="flex items-center gap-1">
