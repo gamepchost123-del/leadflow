@@ -31,7 +31,7 @@ const ROLE_FILTERS = [
   { key: 'tandarts', label: '🦷 Tandarts', pipeline: 'Emails: Tandarts Werkgever' },
   { key: 'apotheek', label: '💊 Apotheek', pipeline: 'Emails: Apotheek Werkgever' },
   { key: 'secretaresse', label: '📋 Medisch secr.', pipeline: 'Emails: Medisch secretaresse Werkgever' },
-  { key: 'beveiliger', label: '🛡️ Beveiliger', pipeline: 'Emails: Beveiliger Werkgever' },
+  { key: 'beveiliger', label: '🛡️ Beveiliger', pipeline: 'Emails: beveiliger Geja' },
   { key: 'none', label: '➖ Geen rol', pipeline: '__none__' },
 ];
 
@@ -97,6 +97,27 @@ Onze studenten zijn volwassen herintreders. Wij leiden ze snel en praktijkgerich
 * Vast contactpersoon voor u en uw collega's.
 
 De studenten hebben bewust gekozen om medisch secretaresse te worden en willen in dienst komen. Ik stel ze graag vrijblijvend voor.
+
+Is dit een optie voor u? Bij voorbaat dank voor uw reactie.
+
+Met vriendelijke groet, Jonathan`,
+  },
+  'Emails: beveiliger Geja': {
+    subject: 'Beveiligers',
+    body: (company) => `Beste team van ${company},
+
+Ik zag de vacature voor beveiliger. Wij scholen diverse kandidaten uit uw omgeving om tot beveiliger.
+
+Onze kandidaten zijn gemotiveerde herintreders die bewust voor de beveiliging kiezen. Wij leiden ze snel en praktijkgericht op tot beveiliger; ze behalen een erkend diploma. We gebruiken hiervoor de Praktijkopleiding in plaats van een regulier BOL/BBL-traject. De voordelen zijn:
+
+* Praktischer: de focus ligt bij de start op de belangrijkste vaardigheden voor de functie. De algemene en keuzevakken volgen later, maar de kandidaat is wel snel inzetbaar.
+* Sneller: het traject is korter dan een reguliere opleiding; bij vrijstellingen nog korter.
+* De werkbegeleiding is efficiënt. Alleen de kerntaken, werkprocessen en persoonlijke leerdoelen komen aan de orde.
+* We hebben niet de verplichting iedereen aan te nemen. We screenen o.a. houding, communicatieve en digitale vaardigheden en ervaring.
+* Betaalbaar door de lage prijs en/of subsidiemogelijkheden.
+* Vast contactpersoon voor u en uw collega's.
+
+De kandidaten hebben bewust gekozen om beveiliger te worden en willen in dienst komen. Ik stel ze graag vrijblijvend voor.
 
 Is dit een optie voor u? Bij voorbaat dank voor uw reactie.
 
