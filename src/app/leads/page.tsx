@@ -58,8 +58,49 @@ Is dit een optie voor u? Bij voorbaat dank voor uw reactie.
 Met vriendelijke groet,
 Jonathan`,
   },
-  // 'Emails: Apotheek Werkgever': { subject: '...', body: (company) => `...` },
-  // 'Emails: Medisch secretaresse Werkgever': { subject: '...', body: (company) => `...` },
+  'Emails: Apotheek Werkgever': {
+    subject: 'Apotheekassistenten',
+    body: (company) => `Beste team van ${company},
+
+Ik zag de vacature voor apotheekassistent. Wij scholen diverse studenten uit uw omgeving om tot apotheekassistent.
+
+Onze studenten zijn volwassen herintreders die bewust voor de zorg kiezen. Wij leiden ze op via een leerwerkplek: ze volgen 68 online avondlessen (maandag of donderdag, 18.45–22.00 uur) en doen ondertussen praktijkervaring op op de werkvloer. Het beroepsgerichte deel examineren we op de leerwerkplek; voor Nederlands, Engels en Rekenen komen ze naar onze locatie aan het Kanaalpark 157 in Leiden. Ze ronden af met een erkend MBO4-diploma Apothekersassistent. De opleiding duurt 14 maanden; bij vrijstellingen korter.
+
+De voordelen voor u:
+
+* Direct meewerkend tijdens de opleiding: de student werkt vanaf de start bij u en draagt meteen bij, terwijl hij of zij leert.
+* Efficiënte werkbegeleiding: alleen de kerntaken, werkprocessen en persoonlijke leerdoelen komen aan bod.
+* We nemen niet iedereen aan: we screenen o.a. houding, communicatieve en digitale vaardigheden en ervaring in de zorg.
+* Betaalbaar door de lage prijs en/of subsidiemogelijkheden.
+* Eén vast contactpersoon voor u en uw collega's.
+
+De studenten willen in dienst komen en zijn gemotiveerd. Ik stel ze graag vrijblijvend aan u voor.
+
+Is dit een optie voor u? Bij voorbaat dank voor uw reactie.
+
+Met vriendelijke groet, Jonathan`,
+  },
+  'Emails: Medisch secretaresse Werkgever': {
+    subject: 'Medisch secretaresses',
+    body: (company) => `Beste team van ${company},
+
+Ik zag de vacature voor medisch secretaresse. Wij scholen diverse studenten uit uw omgeving om tot medisch secretaresse.
+
+Onze studenten zijn volwassen herintreders. Wij leiden ze snel en praktijkgericht op tot medisch secretaresse op MBO4-niveau; ze ontvangen het diploma van Instituut Cronesteyn. We gebruiken hiervoor de Praktijkopleiding in plaats van BOL of BBL. De voordelen zijn:
+
+* Praktischer: de focus ligt bij de start op de belangrijkste vaardigheden voor de functie — medische administratie, werken met het EPD en medische software, plannen en communicatie. De algemene en keuzevakken volgen later, maar de student is wel snel inzetbaar.
+* Sneller: de hele opleiding duurt 6 maanden. In het geval van vrijstellingen is het traject nog korter.
+* De werkbegeleiding is efficiënt. Alleen de kerntaken, werkprocessen en persoonlijke leerdoelen komen aan de orde.
+* We hebben niet de verplichting iedereen aan te nemen. We screenen o.a. houding, communicatieve en digitale vaardigheden en ervaring in de zorg.
+* Betaalbaar door de lage prijs en/of subsidiemogelijkheden.
+* Vast contactpersoon voor u en uw collega's.
+
+De studenten hebben bewust gekozen om medisch secretaresse te worden en willen in dienst komen. Ik stel ze graag vrijblijvend voor.
+
+Is dit een optie voor u? Bij voorbaat dank voor uw reactie.
+
+Met vriendelijke groet, Jonathan`,
+  },
 };
 
 /** Build the mailto link for a lead, using its role template if available. */
