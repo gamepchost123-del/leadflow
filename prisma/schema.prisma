@@ -25,6 +25,7 @@ model Lead {
   ghlSyncedAt      DateTime?
   ghlSyncError     String?
   ghlPipeline      String?   // target GHL pipeline name (null = env default)
+  mailedAt         DateTime? // set when the user clicks Mail + GHL (button turns grey)
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
   outreaches   Outreach[]

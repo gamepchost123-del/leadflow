@@ -23,6 +23,7 @@ interface Lead {
   ghlSyncedAt?: string | null;
   ghlSyncError?: string | null;
   ghlPipeline?: string | null;
+  mailedAt?: string | null;
 }
 
 /** Role filter options — matched against a lead's ghlPipeline. */
@@ -165,6 +166,7 @@ Met vriendelijke groet`
   const [isSending, setIsSending] = useState(false);
   const [sendProgress, setSendProgress] = useState<{ sent: number; total: number; failed: number } | null>(null);
   const [ghlSyncing, setGhlSyncing] = useState<Set<string>>(new Set());
+  const [mailedIds, setMailedIds] = useState<Set<string>>(new Set()); // optimistic "mailed" (grey button)
 
   useEffect(() => { fetchLeads(); }, []);
 
@@ -214,6 +216,7 @@ Met vriendelijke groet`
   // --- Mail + GHL: move the lead's opportunity to the "Gemaild" stage ---
   const markMailed = async (ids: string[]) => {
     if (ids.length === 0) return;
+    setMailedIds((prev) => new Set([...prev, ...ids])); // grey the button immediately
     setGhlSyncing((prev) => new Set([...prev, ...ids]));
     try {
       const res = await fetch('/api/leads/mail-sync', {
@@ -573,16 +576,21 @@ Met vriendelijke groet`
                       <td className="text-right">
                         <div className="flex items-center gap-2 justify-end">
                           {lead.email ? (
-                            <a
-                              href={buildMailto(lead)}
-                              onClick={() => { if (!ghlSyncing.has(lead.id)) markMailed([lead.id]); }}
-                              className="btn btn-sm btn-primary"
-                              title={lead.ghlOpportunityId
-                                ? 'Mail openen (staat al in GHL-pipeline)'
-                                : (lead.ghlSyncError ? `Mail openen + opnieuw naar GHL (vorige poging: ${lead.ghlSyncError})` : 'Mail openen én in de GHL-pipeline zetten')}
-                            >
-                              {ghlSyncing.has(lead.id) ? '✉ …' : (lead.ghlOpportunityId ? '✉ Mail ✓GHL' : '✉ Mail + GHL')}
-                            </a>
+                            (() => {
+                              const isMailed = !!lead.mailedAt || mailedIds.has(lead.id);
+                              return (
+                                <a
+                                  href={buildMailto(lead)}
+                                  onClick={() => { if (!ghlSyncing.has(lead.id)) markMailed([lead.id]); }}
+                                  className={`btn btn-sm ${isMailed ? 'btn-secondary opacity-60' : 'btn-primary'}`}
+                                  title={isMailed
+                                    ? 'Al gemaild en in GHL (stage: Gemaild) — klik om opnieuw te mailen'
+                                    : 'Mail openen én in de GHL-pipeline zetten (stage: Gemaild)'}
+                                >
+                                  {ghlSyncing.has(lead.id) ? '✉ …' : (isMailed ? '✓ Gemaild' : '✉ Mail + GHL')}
+                                </a>
+                              );
+                            })()
                           ) : !lead.ghlOpportunityId ? (
                             <button
                               onClick={() => syncToGhl([lead.id])}

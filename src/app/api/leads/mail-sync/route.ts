@@ -48,6 +48,7 @@ export async function POST(req: Request) {
             ghlContactId: contactId || (lead as any).ghlContactId,
             ghlOpportunityId: opportunityId,
             ghlSyncedAt: new Date(),
+            mailedAt: new Date(),
             ghlSyncError: null,
           },
         });
