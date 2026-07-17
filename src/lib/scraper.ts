@@ -442,9 +442,28 @@ function hasVacancySignal(text: string): boolean {
   return VACANCY_SIGNALS.some((s) => lower.includes(s));
 }
 
+/** Keywords that indicate the searched role, e.g. "apothekersassistent" -> ["apothekersassistent","apothe"]. */
+function roleKeywords(query: string): string[] {
+  const q = query.toLowerCase().trim();
+  const terms = new Set<string>();
+  if (q) terms.add(q);
+  for (const w of q.split(/\s+/)) {
+    if (w.length >= 5) terms.add(w.slice(0, 6)); // loose stem so spelling variants still match
+  }
+  return [...terms];
+}
+
+/** True when the page both advertises a vacancy AND mentions the searched role. */
+function hasRoleVacancy(text: string, roleTerms: string[]): boolean {
+  if (!hasVacancySignal(text)) return false;
+  if (roleTerms.length === 0) return true;
+  const lower = text.toLowerCase();
+  return roleTerms.some((t) => lower.includes(t));
+}
+
 // ---------- 2. Scrape an individual page for contact info ----------
 
-async function scrapePage(url: string, rules: FilterRules): Promise<{
+async function scrapePage(url: string, rules: FilterRules, roleTerms: string[] = []): Promise<{
   companyName: string;
   emails: string[];
   phones: string[];
@@ -488,8 +507,8 @@ async function scrapePage(url: string, rules: FilterRules): Promise<{
       $('meta[property="og:description"]').attr('content') ||
       '';
 
-    // Does this page actually advertise an open vacancy?
-    const hasVacancy = hasVacancySignal(`${$('title').text()} ${metaDescription} ${bodyText.slice(0, 8000)}`);
+    // Does this page advertise an open vacancy for the searched role?
+    const hasVacancy = hasRoleVacancy(`${$('title').text()} ${metaDescription} ${bodyText.slice(0, 12000)}`, roleTerms);
 
     let linkedinUrl: string | undefined;
     let facebookUrl: string | undefined;
@@ -974,10 +993,11 @@ async function runSearchPipeline(
     facebookUrl?: string;
   }>)[] = [];
 
+  const roleTerms = mode === 'recruitment' ? roleKeywords(baseQuery) : [];
   let scrapedSoFar = 0;
   for (const batch of scrapeBatches) {
     const scraped = await Promise.allSettled(
-      batch.map((r) => scrapePage(r.url, rules)),
+      batch.map((r) => scrapePage(r.url, rules, roleTerms)),
     );
     allScraped.push(...scraped);
     scrapedSoFar += batch.length;
@@ -1026,9 +1046,9 @@ async function runSearchPipeline(
       return;
     }
 
-    // Recruitment: only keep pages that actually advertise an open vacancy
-    // (drops company pages that merely mention the role without a live opening).
-    if (mode === 'recruitment' && !scrapeResult?.hasVacancy && !hasVacancySignal(`${raw.title} ${raw.snippet}`)) {
+    // Recruitment: only keep pages that advertise an open vacancy FOR THIS ROLE
+    // (drops company pages without a live opening, or with an unrelated vacancy).
+    if (mode === 'recruitment' && !scrapeResult?.hasVacancy) {
       skippedNoVacancy++;
       return;
     }
